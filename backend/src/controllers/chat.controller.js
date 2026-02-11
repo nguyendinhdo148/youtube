@@ -1,13 +1,27 @@
-import { generateStreamToken } from "../config/stream.js";
+import { StreamChat } from "stream-chat";
 
-export const getStreamToken = async (req, res) => {
+const serverClient = StreamChat.getInstance(
+  process.env.STREAM_API_KEY,
+  process.env.STREAM_API_SECRET
+);
+
+export const deleteConversation = async (req, res) => {
   try {
-    const token = generateStreamToken(req.auth().userId);
-    res.status(200).json({ token });
+    const { channelId } = req.params;
+
+    if (!channelId) {
+      return res.status(400).json({ message: "channelId is required" });
+    }
+
+    await serverClient.deleteChannel("messaging", channelId);
+
+    res.status(200).json({
+      message: "Conversation deleted successfully",
+    });
   } catch (error) {
-    console.log("Error generating Stream token:", error);
+    console.error("Delete conversation error:", error);
     res.status(500).json({
-      message: "Failed to generate Stream token",
+      message: "Failed to delete conversation",
     });
   }
 };

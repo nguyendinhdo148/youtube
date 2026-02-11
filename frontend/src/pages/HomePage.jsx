@@ -1,6 +1,8 @@
 import { UserButton } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
+import axios from "axios";
+
 import { useStreamChat } from "../hooks/useStreamChat";
 import PageLoader from "../components/PageLoader";
 
@@ -15,12 +17,11 @@ import {
 } from "stream-chat-react";
 
 import "../styles/stream-chat-theme.css";
-import { HashIcon, PlusIcon, UsersIcon } from "lucide-react";
+import { HashIcon, PlusIcon, UsersIcon, Trash2 } from "lucide-react";
 
 import CreateChannelModal from "../components/CreateChannelModal";
 import CustomChannelPreview from "../components/CustomChannelPreview";
 import UsersList from "../components/UsersList";
-import CustomChannelHeader from "../components/CustomChannelHeader";
 
 const HomePage = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -29,15 +30,39 @@ const HomePage = () => {
 
   const { chatClient, error, isLoading } = useStreamChat();
 
-  // set active channel from URL params
+  // set active channel from URL
   useEffect(() => {
     if (!chatClient) return;
+
     const channelId = searchParams.get("channel");
     if (channelId) {
       const channel = chatClient.channel("messaging", channelId);
       setActiveChannel(channel);
     }
   }, [chatClient, searchParams]);
+
+  // ===== XOÁ HỘI THOẠI =====
+  const handleDeleteConversation = async () => {
+    if (!activeChannel) return;
+
+    const ok = window.confirm(
+      "Bạn có chắc muốn xoá hội thoại này không? Hành động này không thể hoàn tác."
+    );
+    if (!ok) return;
+
+    try {
+      await axios.delete(
+        `/api/chat/conversation/${activeChannel.id}`
+      );
+
+      // reset UI
+      setActiveChannel(null);
+      setSearchParams({});
+    } catch (error) {
+      console.error(error);
+      alert("Xoá hội thoại thất bại");
+    }
+  };
 
   if (error) return <p>Something went wrong...</p>;
   if (isLoading || !chatClient) return <PageLoader />;
@@ -53,22 +78,18 @@ const HomePage = () => {
               <div className="team-channel-list__header gap-4">
                 <div className="brand-container">
                   <img
-  src="/logo.png"
-  alt="Logo"
-  className="brand-logo"
-  style={{
-    height: 32,        // chỉnh cao/thấp tùy ý: 28 / 32 / 36
-    width: "auto",     // 🔥 quan trọng
-    maxWidth: 140,     // giới hạn để không tràn
-    objectFit: "contain",
-  }}
-/>
-
+                    src="/logo.png"
+                    alt="Logo"
+                    style={{
+                      height: 32,
+                      width: "auto",
+                      maxWidth: 140,
+                      objectFit: "contain",
+                    }}
+                  />
                   <span className="brand-name">Youtube</span>
                 </div>
-                <div className="user-button-wrapper">
-                  <UserButton />
-                </div>
+                <UserButton />
               </div>
 
               {/* CONTENT */}
@@ -84,13 +105,11 @@ const HomePage = () => {
                   </button>
                 </div>
 
-                {/* CHANNELS */}
+                {/* CHANNEL LIST */}
                 <div className="channel-sections">
                   <div className="section-header">
-                    <div className="section-title">
-                      <HashIcon className="size-4" />
-                      <span>Channels</span>
-                    </div>
+                    <HashIcon className="size-4" />
+                    <span>Channels</span>
                   </div>
 
                   <ChannelList
@@ -113,29 +132,44 @@ const HomePage = () => {
 
                 {/* DIRECT MESSAGES */}
                 <div className="channel-sections">
-                  <div className="section-header direct-messages">
-                    <div className="section-title">
-                      <UsersIcon className="size-4" />
-                      <span>Direct Messages</span>
-                    </div>
+                  <div className="section-header">
+                    <UsersIcon className="size-4" />
+                    <span>Direct Messages</span>
                   </div>
-
                   <UsersList activeChannel={activeChannel} />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT CONTAINER */}
+          {/* CHAT WINDOW */}
           <div className="chat-main">
-            <Channel channel={activeChannel}>
-              <Window>
-                <CustomChannelHeader />
-                <MessageList />
-                <MessageInput />
-              </Window>
-              <Thread />
-            </Channel>
+            {activeChannel ? (
+              <Channel channel={activeChannel}>
+                <Window>
+                  {/* HEADER CHAT (CUSTOM) */}
+                  <div className="custom-channel-header">
+                    <div className="channel-title">
+                      {activeChannel.data?.name || "Conversation"}
+                    </div>
+
+                    <button
+                      onClick={handleDeleteConversation}
+                      className="delete-channel-btn"
+                    >
+                      <Trash2 size={18} />
+                      <span>Xoá hội thoại</span>
+                    </button>
+                  </div>
+
+                  <MessageList />
+                  <MessageInput />
+                </Window>
+                <Thread />
+              </Channel>
+            ) : (
+              <div className="empty-chat">Chọn 1 hội thoại</div>
+            )}
           </div>
         </div>
 
