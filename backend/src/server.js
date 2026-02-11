@@ -12,85 +12,69 @@ import chatRoutes from "./routes/chat.route.js";
 
 const app = express();
 
-/* =======================
-   MIDDLEWARE
-======================= */
+/* =====================
+   BASIC MIDDLEWARE
+===================== */
 
 app.use(express.json());
 
-const allowedOrigins = [
-  "https://youtube-fe-dun.vercel.app",
-  "http://localhost:5173"
-];
-
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With"
-    ]
+    origin: [
+      "http://localhost:5173",
+      "https://youtube-fe-dun.vercel.app"
+    ],
+    credentials: true
   })
 );
 
-// ⚠️ BẮT BUỘC cho preflight
-app.options("*", cors());
-
-// Clerk PHẢI nằm sau CORS
-app.use(clerkMiddleware());
-
-/* =======================
-   ROUTES
-======================= */
+/* =====================
+   ROUTES KHÔNG CẦN AUTH
+===================== */
 
 app.get("/", (req, res) => {
   res.send("Hello World! 123");
 });
 
-app.get("/debug-sentry", () => {
-  throw new Error("My first Sentry error!");
-});
+/* =====================
+   AUTH MIDDLEWARE
+   (SAU CORS)
+===================== */
+
+app.use(clerkMiddleware());
+
+/* =====================
+   API ROUTES
+===================== */
 
 app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/chat", chatRoutes);
 
-/* =======================
+/* =====================
    ERROR HANDLER
-======================= */
+===================== */
 
 Sentry.setupExpressErrorHandler(app);
 
-/* =======================
-   START SERVER
-======================= */
+/* =====================
+   DB CONNECT (SAFE)
+===================== */
 
-const startServer = async () => {
-  try {
+let isConnected = false;
+const initDB = async () => {
+  if (!isConnected) {
     await connectDB();
-
-    // ⚠️ Vercel KHÔNG cần listen
-    if (ENV.NODE_ENV !== "production") {
-      app.listen(ENV.PORT, () => {
-        console.log("Server running on port:", ENV.PORT);
-      });
-    }
-  } catch (error) {
-    console.error("Error starting server:", error);
-    process.exit(1);
+    isConnected = true;
   }
 };
 
-startServer();
+app.use(async (req, res, next) => {
+  await initDB();
+  next();
+});
+
+/* =====================
+   EXPORT (QUAN TRỌNG)
+===================== */
 
 export default app;
