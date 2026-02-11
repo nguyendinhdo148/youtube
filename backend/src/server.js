@@ -6,76 +6,44 @@ import { clerkMiddleware } from "@clerk/express";
 import { functions, inngest } from "./config/inngest.js";
 import { serve } from "inngest/express";
 import chatRoutes from "./routes/chat.route.js";
+
 import cors from "cors";
+
 import * as Sentry from "@sentry/node";
 
 const app = express();
 
-// Middleware
 app.use(express.json());
 app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
-app.use(clerkMiddleware());
+app.use(clerkMiddleware()); // req.auth will be available in the request object
 
-// Routes
-app.get("/", (req, res) => {
-  res.json({ 
-    success: true,
-    message: "Backend API is running!",
-    timestamp: new Date().toISOString(),
-    nodeEnv: ENV.NODE_ENV
-  });
+app.get("/debug-sentry", (req, res) => {
+  throw new Error("My first Sentry error!");
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({ status: "healthy", timestamp: new Date().toISOString() });
+app.get("/", (req, res) => {
+  res.send("Hello World! 123");
 });
 
 app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/chat", chatRoutes);
 
-// 404 handler
-app.use("*", (req, res) => {
-  res.status(404).json({ 
-    error: "Not Found", 
-    path: req.originalUrl,
-    method: req.method 
-  });
-});
-
-// Error handling
 Sentry.setupExpressErrorHandler(app);
 
-// Kết nối database (chỉ một lần)
-let isDbConnected = false;
-
-const initApp = async () => {
-  if (!isDbConnected) {
-    try {
-      await connectDB();
-      console.log("✅ Database connected");
-      isDbConnected = true;
-    } catch (error) {
-      console.error("❌ Database connection failed:", error);
+const startServer = async () => {
+  try {
+    await connectDB();
+    if (ENV.NODE_ENV !== "production") {
+      app.listen(ENV.PORT, () => {
+        console.log("Server started on port:", ENV.PORT);
+      });
     }
+  } catch (error) {
+    console.error("Error starting server:", error);
+    process.exit(1); // Exit the process with a failure code
   }
-  return app;
 };
 
-// Khởi tạo app
-const appPromise = initApp();
+startServer();
 
-// Export cho Vercel
-export default async function handler(req, res) {
-  const expressApp = await appPromise;
-  return expressApp(req, res);
-}
-
-// Chỉ chạy server local khi development
-if (process.env.NODE_ENV === 'development') {
-  const PORT = ENV.PORT || 3000;
-  appPromise.then(app => {
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running locally on port ${PORT}`);
-    });
-  });
-}
+export default app;
