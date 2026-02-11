@@ -11,62 +11,71 @@ import * as Sentry from "@sentry/node";
 
 const app = express();
 
+// Middleware
 app.use(express.json());
 app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
-app.use(clerkMiddleware()); // req.auth will be available in the request object
+app.use(clerkMiddleware());
 
-app.get("/debug-sentry", (req, res) => {
-  throw new Error("My first Sentry error!");
-});
-
+// Routes
 app.get("/", (req, res) => {
   res.json({ 
     success: true,
     message: "Backend API is running!",
     timestamp: new Date().toISOString(),
-    endpoints: [
-      "/api/inngest",
-      "/api/chat",
-      "/debug-sentry"
-    ]
+    nodeEnv: ENV.NODE_ENV
   });
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({ 
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    environment: ENV.NODE_ENV
-  });
+  res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
 app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/chat", chatRoutes);
 
+// 404 handler
+app.use("*", (req, res) => {
+  res.status(404).json({ 
+    error: "Not Found", 
+    path: req.originalUrl,
+    method: req.method 
+  });
+});
+
+// Error handling
 Sentry.setupExpressErrorHandler(app);
 
-// QUAN TRỌNG: Khởi tạo database và start server
-const startServer = async () => {
-  try {
-    await connectDB();
-    console.log("✅ Database connected successfully");
-    
-    // Chỉ listen port khi chạy local
-    if (ENV.NODE_ENV !== 'production') {
-      app.listen(ENV.PORT, () => {
-        console.log(`🚀 Server started locally on port: ${ENV.PORT}`);
-      });
-    } else {
-      console.log("✅ Server ready for Vercel serverless environment");
+// Kết nối database (chỉ một lần)
+let isDbConnected = false;
+
+const initApp = async () => {
+  if (!isDbConnected) {
+    try {
+      await connectDB();
+      console.log("✅ Database connected");
+      isDbConnected = true;
+    } catch (error) {
+      console.error("❌ Database connection failed:", error);
     }
-  } catch (error) {
-    console.error("❌ Error starting server:", error);
-    process.exit(1);
   }
+  return app;
 };
 
-// Gọi startServer ngay lập tức
-startServer();
+// Khởi tạo app
+const appPromise = initApp();
 
-// QUAN TRỌNG: Export app cho Vercel
-export default app;
+// Export cho Vercel
+export default async function handler(req, res) {
+  const expressApp = await appPromise;
+  return expressApp(req, res);
+}
+
+// Chỉ chạy server local khi development
+if (process.env.NODE_ENV === 'development') {
+  const PORT = ENV.PORT || 3000;
+  appPromise.then(app => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running locally on port ${PORT}`);
+    });
+  });
+}

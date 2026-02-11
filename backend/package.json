@@ -4,7 +4,8 @@
   "main": "src/server.js",
   "scripts": {
   "dev": "cross-env NODE_OPTIONS=--import=./instrument.mjs nodemon src/server.js",
-  "start": "cross-env NODE_OPTIONS=--import=./instrument.mjs node src/server.js"
+  "start": "cross-env NODE_OPTIONS=--import=./instrument.mjs node src/server.js",
+   "vercel-build": "echo 'Building for Vercel...'"
 }
 ,
   "keywords": [],
